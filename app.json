@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Basketball Stat Tracker",
+    "slug": "basketball-stat-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ea580c"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ea580c"
+      }
+    }
+  }
+}
