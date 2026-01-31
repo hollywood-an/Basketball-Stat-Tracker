@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Change this to your Railway URL after deployment
 // For local development, use your computer's IP address (not localhost)
 // Example: 'http://192.168.1.100:3000'
-const API_URL = 'http://localhost:3000';
+const API_URL = 'https://basketball-stat-tracker-production.up.railway.app';
 
 const TOKEN_KEY = '@basketball_device_token';
 
