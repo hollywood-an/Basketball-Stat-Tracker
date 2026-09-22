@@ -12,6 +12,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Share,
+  Alert,
 } from 'react-native';
 import api from './api';
 
@@ -175,6 +177,72 @@ const ConfirmModal = ({ visible, onSave, onDontSave, onCancel }) => (
   </Modal>
 );
 
+const formatBoxScore = (game) => {
+  const t1 = game.team1;
+  const t2 = game.team2;
+  const t1Name = t1.name || 'Team 1';
+  const t2Name = t2.name || 'Team 2';
+  const winner = t1.total > t2.total ? t1Name : t2.total > t1.total ? t2Name : null;
+
+  const formatTeam = (team, teamName) => {
+    let section = `${teamName}\n`;
+    section += '———————————\n';
+    team.players.forEach(p => {
+      section += `#${p.number} ${p.name} — ${p.points} pts, ${p.fouls} fls\n`;
+    });
+    if (team.bonusPoints > 0) {
+      section += `+${team.bonusPoints} team bonus\n`;
+    }
+    section += `Total: ${team.total}\n`;
+    return section;
+  };
+
+  let text = '🏀 BASKETBALL BOX SCORE\n';
+  text += `📅 ${game.date}\n\n`;
+  text += `${t1Name}  ${t1.total}  —  ${t2.total}  ${t2Name}\n`;
+  text += winner ? `🏆 Winner: ${winner}\n` : `🤝 Result: TIE\n`;
+  text += '\n';
+  text += formatTeam(t1, t1Name);
+  text += '\n';
+  text += formatTeam(t2, t2Name);
+  text += '\n— Sent from Basketball Stat Tracker';
+
+  return text;
+};
+
+const formatBoxScoreCSV = (game) => {
+  const t1 = game.team1;
+  const t2 = game.team2;
+  let csv = 'Team,Player Number,Player Name,Points,Fouls\n';
+  t1.players.forEach(p => {
+    csv += `"${t1.name || 'Team 1'}","${p.number}","${p.name}",${p.points},${p.fouls}\n`;
+  });
+  t2.players.forEach(p => {
+    csv += `"${t2.name || 'Team 2'}","${p.number}","${p.name}",${p.points},${p.fouls}\n`;
+  });
+  return csv;
+};
+
+const shareGame = async (game, format = 'text') => {
+  try {
+    const content = format === 'csv'
+      ? formatBoxScoreCSV(game)
+      : formatBoxScore(game);
+    const title = format === 'csv'
+      ? `Box Score - ${game.date}.csv`
+      : `Box Score - ${game.date}`;
+
+    await Share.share({
+      message: content,
+      title: title,
+    });
+  } catch (error) {
+    if (error.message !== 'User did not share') {
+      Alert.alert('Error', 'Failed to share game data');
+    }
+  }
+};
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [team1, setTeam1] = useState({ name: '', players: [], bonusPoints: 0 });
@@ -301,6 +369,8 @@ export default function App() {
   const getTeamTotal = (team) => team.players.reduce((sum, p) => sum + p.points, 0) + (team.bonusPoints || 0);
 
   const saveGame = async () => {
+    let savedGameData = null;
+
     if (team1.players.length > 0 || team2.players.length > 0) {
       setIsSaving(true);
       try {
@@ -311,9 +381,9 @@ export default function App() {
         };
         const savedGame = await api.saveGame(gameData);
         setPastGames([savedGame, ...pastGames]);
+        savedGameData = savedGame;
       } catch (error) {
         console.error('Failed to save game:', error);
-        // Fallback to local storage if API fails
         const newGame = {
           id: Date.now(),
           date: new Date().toLocaleDateString(),
@@ -321,14 +391,30 @@ export default function App() {
           team2: { ...team2, total: getTeamTotal(team2) },
         };
         setPastGames([newGame, ...pastGames]);
+        savedGameData = newGame;
       } finally {
         setIsSaving(false);
       }
     }
+
     setTeam1({ name: '', players: [], bonusPoints: 0 });
     setTeam2({ name: '', players: [], bonusPoints: 0 });
     setShowExitModal(false);
     setCurrentPage('home');
+
+    if (savedGameData) {
+      setTimeout(() => {
+        Alert.alert(
+          'Game Saved!',
+          'Would you like to share the box score?',
+          [
+            { text: 'No Thanks', style: 'cancel' },
+            { text: 'Share as Text', onPress: () => shareGame(savedGameData, 'text') },
+            { text: 'Share as CSV', onPress: () => shareGame(savedGameData, 'csv') },
+          ]
+        );
+      }, 300);
+    }
   };
 
   const handleBackClick = () => {
@@ -504,9 +590,17 @@ export default function App() {
               <View key={game.id} style={styles.gameCard}>
                 <View style={styles.gameCardHeader}>
                   <Text style={styles.gameDate}>{game.date}</Text>
-                  <TouchableOpacity onPress={() => deleteGame(game.id)}>
-                    <Text style={styles.deleteButton}>Delete</Text>
-                  </TouchableOpacity>
+                  <View style={styles.gameCardActions}>
+                    <TouchableOpacity onPress={() => shareGame(game, 'text')} style={styles.shareButton}>
+                      <Text style={styles.shareButtonText}>Share</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => shareGame(game, 'csv')} style={styles.csvButton}>
+                      <Text style={styles.csvButtonText}>CSV</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => deleteGame(game.id)}>
+                      <Text style={styles.deleteButton}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <View style={styles.gameScoreContainer}>
@@ -990,6 +1084,33 @@ const styles = StyleSheet.create({
   gameDate: {
     color: '#6b7280',
     fontSize: 12,
+  },
+  gameCardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  shareButton: {
+    backgroundColor: '#ea580c',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  shareButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  csvButton: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  csvButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
   deleteButton: {
     color: '#dc2626',
